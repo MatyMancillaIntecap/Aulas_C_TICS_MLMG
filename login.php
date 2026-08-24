@@ -6,21 +6,34 @@ $error = "";
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $correo = trim($_POST['correo']);
-    $contrasena = trim($_POST['contrasena']);
+    $password = trim($_POST['password']);
 
-    $stmt = $conexion->prepare("SELECT * FROM usuarios WHERE correo = ?");
-    $stmt->execute([$correo]);
-    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!empty($correo) && !empty($password)) {
+        // Buscamos al usuario por correo en la base de datos
+        $stmt = $conexion->prepare("SELECT * FROM usuarios WHERE correo = ?");
+        $stmt->execute([$correo]);
+        $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($usuario && password_verify($contrasena, $usuario['contrasena'])) {
-        $_SESSION['usuario_id'] = $usuario['id'];
-        $_SESSION['nombre'] = $usuario['nombre'];
-        $_SESSION['rol'] = $usuario['rol'];
+        // Validamos la contraseña (soporta texto plano o hash)
+        if ($usuario && ($password === $usuario['password'] || password_verify($password, $usuario['password']))) {
+            
+            // Creamos las variables de sesión (el gafete digital de acceso)
+            $_SESSION['usuario_id'] = $usuario['id'];
+            $_SESSION['nombre'] = $usuario['nombre'];
+            $_SESSION['rol'] = $usuario['rol'];
 
-        header("Location: dashboard.php");
-        exit;
+            // Redirigimos según el rol del usuario
+            if ($usuario['rol'] === 'administrador') {
+                header("Location: admin_panel.php");
+            } else {
+                header("Location: index.php");
+            }
+            exit();
+        } else {
+            $error = "Correo o contraseña incorrectos.";
+        }
     } else {
-        $error = "Correo o contraseña incorrectos.";
+        $error = "Por favor completa todos los campos.";
     }
 }
 ?>
@@ -30,118 +43,46 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar Sesión - Aulas Centro TIC'S</title>
+    <title>Iniciar Sesión - Sistema de Reservas de Aulas</title>
     <style>
-        * { box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            background: linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%); 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            min-height: 100vh; 
-            margin: 0; 
-            padding: 15px;
-            overflow-x: hidden; /* Evita cualquier scroll lateral no deseado */
-        }
-        .login-card { 
-            background: #ffffff; 
-            padding: 35px 25px; 
-            border-radius: 16px; 
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); 
-            width: 100%; 
-            max-width: 400px; 
-            text-align: center;
-        }
-        .logo-container {
-            margin-bottom: 15px;
-        }
-        .logo-container img {
-            max-width: 160px;
-            height: auto;
-        }
-        h2 { 
-            margin: 0 0 25px 0; 
-            color: #1e293b; 
-            font-size: 18px; 
-            font-weight: 600;
-        }
-        .form-group {
-            text-align: left;
-            margin-bottom: 15px;
-        }
-        label { 
-            display: block; 
-            margin-bottom: 6px; 
-            font-weight: 600; 
-            font-size: 13px; 
-            color: #475569; 
-        }
-        input { 
-            width: 100%; 
-            padding: 12px 14px; 
-            border: 1px solid #cbd5e1; 
-            border-radius: 8px; 
-            font-size: 14px; 
-            transition: all 0.3s ease;
-            background: #f8fafc;
-        }
-        input:focus {
-            outline: none;
-            border-color: #2563eb;
-            background: #ffffff;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-        }
-        button { 
-            background: #2563eb; 
-            color: white; 
-            border: none; 
-            padding: 12px; 
-            width: 100%; 
-            margin-top: 15px; 
-            cursor: pointer; 
-            border-radius: 8px; 
-            font-weight: bold; 
-            font-size: 15px; 
-            transition: background 0.2s ease;
-        }
-        button:hover { 
-            background: #1d4ed8; 
-        }
-        .error { 
-            background: #fde8e8; 
-            color: #991b1b; 
-            padding: 10px; 
-            border-radius: 8px; 
-            margin-bottom: 20px; 
-            font-size: 13px; 
-            font-weight: 600; 
-            border: 1px solid #fecaca;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f0f4f8; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .login-card { background: white; padding: 40px 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); width: 100%; max-width: 420px; text-align: center; }
+        .logo-container { margin-bottom: 25px; }
+        .logo-container img { max-width: 180px; height: auto; }
+        h2 { color: #1e3a8a; margin-bottom: 25px; font-size: 22px; }
+        .form-group { margin-bottom: 20px; text-align: left; }
+        label { display: block; margin-bottom: 8px; color: #475569; font-weight: 600; font-size: 14px; }
+        input { width: 100%; padding: 12px 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; transition: border-color 0.2s; }
+        input:focus { border-color: #0284c7; outline: none; box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1); }
+        button { width: 100%; padding: 12px; background-color: #005f73; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+        button:hover { background-color: #0a9396; }
+        .error { background-color: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; border: 1px solid #fecaca; }
     </style>
 </head>
 <body>
 
     <div class="login-card">
         <div class="logo-container">
-            <img src="intecap_-02.png" alt="Logo INTECAP">
+            <!-- Mostramos el logo de INTECAP -->
+            <img src="Intecap_Logo.png" alt="Logo INTECAP">
         </div>
         
-        <h2>Aulas Centro TIC'S</h2>
-
+        <h2>Sistema de Reservas de Aulas</h2>
+        
         <?php if (!empty($error)): ?>
-            <div class="error"><?php echo $error; ?></div>
+            <div class="error"><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
 
         <form action="login.php" method="POST">
             <div class="form-group">
-                <label for="correo">Correo electrónico:</label>
-                <input type="email" id="correo" name="correo" required placeholder="ejemplo@correo.com">
+                <label for="correo">Correo Electrónico</label>
+                <input type="email" id="correo" name="correo" required placeholder="ejemplo@intecap.edu.gt">
             </div>
-
+            
             <div class="form-group">
-                <label for="contrasena">Contraseña:</label>
-                <input type="password" id="contrasena" name="contrasena" required placeholder="••••••••">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" name="password" required placeholder="••••••••">
             </div>
 
             <button type="submit">Iniciar Sesión</button>
