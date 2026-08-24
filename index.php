@@ -101,7 +101,7 @@ $reservas = $stmt_reservas->fetchAll(PDO::FETCH_ASSOC);
         </div>
         <nav>
             <a href="index.php" class="active">📅 Calendario</a>
-            <a href="reservar.php">➕ Registrar Reserva</a>
+            <a href="reservas.php">➕ Registrar Reserva</a>
             <a href="disponibilidad.php">🔍 Buscar Disponibilidad</a>
             <a href="aulas.php">🏛️ Aulas y Recursos</a>
             <?php if ($rol_usuario === 'administrador'): ?>
