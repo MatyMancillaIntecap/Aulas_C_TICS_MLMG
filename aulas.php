@@ -8,7 +8,7 @@ if (!isset($_SESSION['usuario_id'])) {
 }
 
 // Consultamos las aulas
-$stmt_aulas = $conexion->query("SELECT a.*, n.nombre as nivel_nombre FROM aulas a LEFT JOIN niveles n ON a.nivel_id = n.id");
+$stmt_aulas = $conexion->query("SELECT a.*, n.nombre as nivel_nombre FROM aulas a LEFT JOIN niveles n ON a.nivel_id = n.id ORDER BY a.nivel_id ASC, a.codigo ASC");
 $aulas = $stmt_aulas->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
@@ -36,9 +36,11 @@ $aulas = $stmt_aulas->fetchAll(PDO::FETCH_ASSOC);
         
         .aulas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
         .aula-box { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
-        .aula-box h3 { color: #0f172a; font-size: 18px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .badge { background: #38bdf8; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px; }
+        .aula-box h3 { color: #0f172a; font-size: 18px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 5px; }
+        .badges-group { display: flex; gap: 5px; }
+        .badge { background: #38bdf8; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
         .badge.magna { background: #ef4444; }
+        .badge.inactiva { background: #94a3b8; }
         .info-p { font-size: 13px; color: #64748b; margin-bottom: 12px; }
         .recursos-list { background: #f8fafc; padding: 10px; border-radius: 6px; font-size: 13px; }
         .recursos-list strong { color: #334155; display: block; margin-bottom: 5px; }
@@ -48,15 +50,16 @@ $aulas = $stmt_aulas->fetchAll(PDO::FETCH_ASSOC);
 
     <header>
         <div class="logo-area">
-            <img src="logo_intecap.png" alt="Logo INTECAP">
+            <img src="Intecap_Logo.png" alt="Logo INTECAP">
             <h1>Sistema de Reservas</h1>
         </div>
         <nav>
             <a href="index.php">📅 Calendario</a>
-            <a href="reservar.php">➕ Registrar Reserva</a>
+            <a href="reservas.php">➕ Registrar Reservas</a>
+            <a href="mis_reservas.php">📋 Mis Reservas</a>
             <a href="disponibilidad.php">🔍 Buscar Disponibilidad</a>
-            <a href="aulas.php" class="active">🏛️ Aulas y Recursos</a>
-            <?php if ($_SESSION['rol'] === 'administrador'): ?>
+            <a href="aulas.php" class="active" style="color: #0284c7;">🏛️ Aulas y Recursos</a>
+            <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'): ?>
                 <a href="admin_panel.php" style="color: #d97706; font-weight: bold;">⚙️ Panel Admin</a>
             <?php endif; ?>
         </nav>
@@ -75,35 +78,31 @@ $aulas = $stmt_aulas->fetchAll(PDO::FETCH_ASSOC);
 
             <div class="aulas-grid">
                 <?php foreach ($aulas as $aula): ?>
-                    <div class="aula-box">
+                    <div class="aula-box" style="<?= ($aula['estado'] === 'inactiva') ? 'opacity: 0.75; background-color: #f1f5f9;' : '' ?>">
                         <h3>
-                            Aula <?= htmlspecialchars($aula['codigo']) ?>
-                            <?php if ($aula['es_aula_magna']): ?>
-                                <span class="badge magna">Aula Magna</span>
-                            <?php else: ?>
-                                <span class="badge">Nivel <?= $aula['nivel_id'] ?></span>
-                            <?php endif; ?>
+                            <span><?= $aula['es_aula_magna'] ? 'Aula Magna' : 'Aula ' . htmlspecialchars($aula['codigo']) ?></span>
+                            <div class="badges-group">
+                                <?php if ($aula['estado'] === 'inactiva'): ?>
+                                    <span class="badge inactiva">Inactiva</span>
+                                <?php endif; ?>
+
+                                <?php if ($aula['es_aula_magna']): ?>
+                                    <span class="badge magna">Aula Magna</span>
+                                <?php else: ?>
+                                    <span class="badge">Nivel <?= $aula['nivel_id'] ?></span>
+                                <?php endif; ?>
+                            </div>
                         </h3>
-                        <p class="info-p">Capacidad máxima: <strong><?= $aula['capacidad'] ?> personas</strong></p>
+                        
+                        <p class="info-p">
+                            Capacidad máxima: <strong><?= ($aula['estado'] === 'inactiva') ? 'No disponible' : $aula['capacidad'] . ' personas' ?></strong>
+                        </p>
 
                         <div class="recursos-list">
                             <strong>Equipamiento disponible:</strong>
-                            <ul>
-                                <?php
-                                // Consultamos los recursos específicos de esta aula mediante la tabla intermedia aula_recurso
-                                $stmt_rec = $conexion->prepare("SELECT r.nombre, ar.cantidad FROM aula_recurso ar JOIN recursos r ON ar.recurso_id = r.id WHERE ar.aula_id = ?");
-                                $stmt_rec->execute([$aula['id']]);
-                                $recursos = $stmt_rec->fetchAll(PDO::FETCH_ASSOC);
-
-                                if (count($recursos) > 0) {
-                                    foreach ($recursos as $rec) {
-                                        echo '<li>' . $rec['cantidad'] . 'x ' . htmlspecialchars($rec['nombre']) . '</li>';
-                                    }
-                                } else {
-                                    echo '<li style="color: #94a3b8;">Sin recursos registrados</li>';
-                                }
-                                ?>
-                            </ul>
+                            <p style="margin-top: 5px; color: #475569; font-size: 13px;">
+                                <?= !empty($aula['equipamiento_texto']) ? htmlspecialchars($aula['equipamiento_texto']) : '<span style="color: #94a3b8;">Sin recursos registrados</span>' ?>
+                            </p>
                         </div>
                     </div>
                 <?php endforeach; ?>

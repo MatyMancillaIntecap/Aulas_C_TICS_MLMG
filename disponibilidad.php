@@ -9,25 +9,32 @@ if (!isset($_SESSION['usuario_id'])) {
 
 $aulas_disponibles = [];
 $busqueda_realizada = false;
+$fecha_busqueda = "";
+$hora_inicio = "";
+$hora_fin = "";
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $dia_semana = $_POST['dia_semana'];
+    $fecha_busqueda = $_POST['fecha'];
     $hora_inicio = $_POST['hora_inicio'] . ":00";
     $hora_fin = $_POST['hora_fin'] . ":00";
     $busqueda_realizada = true;
 
-    if ($hora_inicio < $hora_fin) {
-        // Buscamos aulas cuyo ID NO se encuentre en la lista de reservas que se cruzan en ese día y horario
+    if ($hora_inicio >= $hora_fin) {
+        $error = "La hora de inicio debe ser menor a la hora de fin.";
+    } else {
+        // Consultamos qué aulas NO tienen una reserva en esa fecha exacta que se cruce con el rango de horas
         $sql = "SELECT a.*, n.nombre as nivel_nombre 
                 FROM aulas a 
                 LEFT JOIN niveles n ON a.nivel_id = n.id 
                 WHERE a.id NOT IN (
                     SELECT aula_id FROM reservas 
-                    WHERE dia_semana = ? AND (hora_inicio < ? AND hora_fin > ?)
+                    WHERE ? BETWEEN fecha AND fecha_fin 
+                    AND (hora_inicio < ? AND hora_fin > ?)
                 )";
         
         $stmt = $conexion->prepare($sql);
-        $stmt->execute([$dia_semana, $hora_fin, $hora_inicio]);
+        // Comparamos si la fecha seleccionada cae dentro del rango [fecha, fecha_fin] de las reservas recurrentes
+        $stmt->execute([$fecha_busqueda, $hora_fin, $hora_inicio]);
         $aulas_disponibles = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
@@ -74,15 +81,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <img src="logo_intecap.png" alt="Logo INTECAP">
             <h1>Sistema de Reservas</h1>
         </div>
+
+
+
+
+
         <nav>
-            <a href="index.php">📅 Calendario</a>
-            <a href="reservar.php">➕ Registrar Reserva</a>
-            <a href="disponibilidad.php" class="active">🔍 Buscar Disponibilidad</a>
-            <a href="aulas.php">🏛️ Aulas y Recursos</a>
-            <?php if ($_SESSION['rol'] === 'administrador'): ?>
-                <a href="admin_panel.php" style="color: #d97706; font-weight: bold;">⚙️ Panel Admin</a>
-            <?php endif; ?>
-        </nav>
+    <a href="index.php">📅 Calendario</a>
+    <a href="reservas.php">➕ Registrar Reservas</a>
+    <a href="mis_reservas.php">📋 Mis Reservas</a>
+    <a href="disponibilidad.php">🔍 Buscar Disponibilidad</a>
+    <a href="aulas.php">🏛️ Aulas y Recursos</a>
+    <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'): ?>
+        <a href="admin_panel.php" style="color: #d97706; font-weight: bold;">⚙️ Panel Admin</a>
+    <?php endif; ?>
+</nav>
+
+
+
         <div>
             <span class="user-info">Hola, <?= htmlspecialchars($_SESSION['nombre']) ?></span>
             <a href="logout.php" class="btn-logout">Salir</a>
@@ -91,24 +107,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     <div class="container">
         <div class="card">
-            <h2>Buscar Aulas Disponibles</h2>
+            <h2>Buscar Aulas Disponibles por Fecha</h2>
             <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
-                Indica el día y el rango de horas que necesitas para consultar qué salones están libres.
+                Indica la fecha específica y el rango de horas para consultar qué salones están libres en ese momento.
             </p>
 
             <form action="disponibilidad.php" method="POST">
                 <div class="form-grid">
                     <div class="form-group">
-                        <label for="dia_semana">Día:</label>
-                        <select name="dia_semana" id="dia_semana" required>
-                            <option value="Lunes">Lunes</option>
-                            <option value="Martes">Martes</option>
-                            <option value="Miércoles">Miércoles</option>
-                            <option value="Jueves">Jueves</option>
-                            <option value="Viernes">Viernes</option>
-                            <option value="Sábado">Sábado</option>
-                            <option value="Domingo">Domingo</option>
-                        </select>
+                        <label for="fecha">Fecha Específica:</label>
+                        <input type="date" id="fecha" name="fecha" required value="<?= date('Y-m-d') ?>">
                     </div>
                     <div class="form-group">
                         <label for="hora_inicio">Hora Inicio:</label>
@@ -133,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         <?php if ($busqueda_realizada): ?>
             <div class="card">
-                <h3>Resultados de Disponibilidad</h3>
+                <h3>Resultados para la fecha: <?= htmlspecialchars($fecha_busqueda) ?></h3>
                 <?php if (count($aulas_disponibles) > 0): ?>
                     <div class="results-grid">
                         <?php foreach ($aulas_disponibles as $aula): ?>
@@ -147,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <?php endforeach; ?>
                     </div>
                 <?php else: ?>
-                    <p style="margin-top: 15px; color: #b91c1c; font-weight: 500;">Lo sentimos, no hay aulas disponibles en ese día y rango horario.</p>
+                    <p style="margin-top: 15px; color: #b91c1c; font-weight: 500;">Lo sentimos, no hay aulas disponibles en esa fecha y rango horario.</p>
                 <?php endif; ?>
             </div>
         <?php endif; ?>
