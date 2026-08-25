@@ -151,16 +151,18 @@ foreach ($reservas_raw as $res) {
             <form method="GET" action="index.php" class="controls-bar" style="margin-top: 15px;" id="calendar-form">
                 <div class="control-group">
                     <label for="aula_id"><strong>Aula:</strong></label>
+                 
+                 
                     <select name="aula_id" id="aula_id" onchange="this.form.submit()">
-                        <?php foreach ($aulas as $a): ?>
+    <?php foreach ($aulas as $a): ?>
+        <?php $seleccionado = ($a['id'] == $aula_id_actual) ? 'selected' : ''; ?>
+        <option value="<?= $a['id'] ?>" <?= $seleccionado ?>>
+            <?= $a['es_aula_magna'] ? 'Aula Magna' : 'Aula ' . htmlspecialchars($a['codigo']) . ' - Nivel ' . htmlspecialchars($a['nivel_id']) ?>
+        </option>
+    <?php endforeach; ?>
+</select>
 
-                            <option value="<?= $a['id'] ?>">
-    Aula <?= htmlspecialchars($a['codigo']) ?> - Nivel <?= htmlspecialchars($a['nivel_id']) ?>
-</option>
 
-
-                        <?php endforeach; ?>
-                    </select>
                 </div>
 
                 <div class="control-group">
