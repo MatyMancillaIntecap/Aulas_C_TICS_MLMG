@@ -43,24 +43,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['registrar_catedratico'
     }
 }
 
-// 2. Lógica para actualizar las aulas a cargo de un catedrático existente
+// 2. Lógica para actualizar los datos del catedrático (Nombre, Correo, Contraseña y Aulas) desde el Modal
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['actualizar_catedratico'])) {
     $usuario_id = $_POST['usuario_id'];
+    $nombre = trim($_POST['nombre']);
+    $correo = trim($_POST['correo']);
+    $nueva_password = $_POST['password'];
     $aulas_asignadas = isset($_POST['aulas']) ? $_POST['aulas'] : [];
 
-    // Borramos las asignaciones anteriores y guardamos las nuevas
-    $conexion->prepare("DELETE FROM usuario_aulas WHERE usuario_id = ?")->execute([$usuario_id]);
-
-    if (!empty($aulas_asignadas)) {
-        $stmt_ua = $conexion->prepare("INSERT INTO usuario_aulas (usuario_id, aula_id) VALUES (?, ?)");
-        foreach ($aulas_asignadas as $aula_id) {
-            $stmt_ua->execute([$usuario_id, $aula_id]);
+    if (empty($nombre) || empty($correo)) {
+        $error = "El nombre y el correo son obligatorios.";
+    } else {
+        // Actualizar datos básicos y contraseña solo si se escribió una nueva
+        if (!empty($nueva_password)) {
+            $password_hash = password_hash($nueva_password, PASSWORD_DEFAULT);
+            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre = ?, correo = ?, password = ? WHERE id = ?");
+            $stmt_upd->execute([$nombre, $correo, $password_hash, $usuario_id]);
+        } else {
+            $stmt_upd = $conexion->prepare("UPDATE usuarios SET nombre = ?, correo = ? WHERE id = ?");
+            $stmt_upd->execute([$nombre, $correo, $usuario_id]);
         }
+
+        // Actualizar aulas a cargo (borrar anteriores e insertar nuevas)
+        $conexion->prepare("DELETE FROM usuario_aulas WHERE usuario_id = ?")->execute([$usuario_id]);
+        if (!empty($aulas_asignadas)) {
+            $stmt_ua = $conexion->prepare("INSERT INTO usuario_aulas (usuario_id, aula_id) VALUES (?, ?)");
+            foreach ($aulas_asignadas as $aula_id) {
+                $stmt_ua->execute([$usuario_id, $aula_id]);
+            }
+        }
+        $mensaje = "¡Catedrático actualizado con éxito!";
     }
-    $mensaje = "¡Aulas a cargo del catedrático actualizadas con éxito!";
 }
 
-// 3. Lógica para actualizar un Aula existente (Capacidad, Estado, Equipamiento, Aula Magna)
+// 3. Lógica para actualizar un Aula existente
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['actualizar_aula'])) {
     $codigo = trim($_POST['codigo']);
     $capacidad = $_POST['capacidad'];
@@ -86,22 +102,6 @@ if (isset($_GET['eliminar_cat'])) {
     }
 }
 
-// Cargar datos si se va a editar un catedrático específico
-$catedratico_a_editar = null;
-$aulas_del_catedratico = [];
-if (isset($_GET['editar_cat'])) {
-    $id_edit_cat = $_GET['editar_cat'];
-    $stmt_cat_ed = $conexion->prepare("SELECT * FROM usuarios WHERE id = ? AND rol = 'catedratico'");
-    $stmt_cat_ed->execute([$id_edit_cat]);
-    $catedratico_a_editar = $stmt_cat_ed->fetch(PDO::FETCH_ASSOC);
-
-    if ($catedratico_a_editar) {
-        $stmt_aulas_cat = $conexion->prepare("SELECT aula_id FROM usuario_aulas WHERE usuario_id = ?");
-        $stmt_aulas_cat->execute([$id_edit_cat]);
-        $aulas_del_catedratico = $stmt_aulas_cat->fetchAll(PDO::FETCH_COLUMN);
-    }
-}
-
 // Estadísticas y listas generales
 $total_aulas = $conexion->query("SELECT COUNT(*) FROM aulas")->fetchColumn();
 $total_reservas = $conexion->query("SELECT COUNT(*) FROM reservas")->fetchColumn();
@@ -109,7 +109,10 @@ $total_catedraticos = $conexion->query("SELECT COUNT(*) FROM usuarios WHERE rol 
 
 $aulas = $conexion->query("SELECT a.*, n.nombre as nivel_nombre FROM aulas a LEFT JOIN niveles n ON a.nivel_id = n.id ORDER BY a.nivel_id ASC, a.codigo ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-$sql_profes = "SELECT u.id, u.nombre, u.correo, GROUP_CONCAT(a.codigo SEPARATOR ', ') as aulas_cargo 
+// Consulta para obtener catedráticos junto con una lista en formato JSON de sus aulas asignadas (para abrirlas en el modal)
+$sql_profes = "SELECT u.id, u.nombre, u.correo, 
+               GROUP_CONCAT(a.codigo SEPARATOR ', ') as aulas_cargo,
+               GROUP_CONCAT(ua.aula_id) as ids_aulas
                FROM usuarios u 
                LEFT JOIN usuario_aulas ua ON u.id = ua.usuario_id 
                LEFT JOIN aulas a ON ua.aula_id = a.id 
@@ -157,7 +160,7 @@ $catedraticos = $conexion->query($sql_profes)->fetchAll(PDO::FETCH_ASSOC);
 
         .btn { background-color: #005f73; color: white; border: none; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
         .btn:hover { background-color: #0a9396; }
-        .btn-edit { background-color: #0284c7; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: bold; display: inline-block; }
+        .btn-edit { background-color: #0284c7; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: bold; display: inline-block; cursor: pointer; border: none; }
         .btn-edit:hover { background-color: #0369a1; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
@@ -174,6 +177,19 @@ $catedraticos = $conexion->query($sql_profes)->fetchAll(PDO::FETCH_ASSOC);
 
         .alert-success { background-color: #d1fae5; color: #065f46; padding: 12px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #a7f3d0; font-size: 13px; }
         .alert-error { background-color: #fee2e2; color: #991b1b; padding: 12px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #fecaca; font-size: 13px; }
+
+        /* ESTILOS PARA LA VENTANA FLOTANTE (MODAL) */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
+        .modal-content { background: white; padding: 30px; border-radius: 10px; width: 100%; max-width: 650px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { color: #1e3a8a; font-size: 18px; }
+        .btn-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; font-weight: bold; }
+
+
+
+
+
+
     </style>
 </head>
 <body>
@@ -290,54 +306,43 @@ $catedraticos = $conexion->query($sql_profes)->fetchAll(PDO::FETCH_ASSOC);
             </table>
         </div>
 
-        <!-- SECCIÓN: GESTIÓN DE CATEDRÁTICOS (REGISTRO Y EDICIÓN DE AULAS A CARGO) -->
+        <!-- SECCIÓN: REGISTRO DE NUEVOS CATEDRÁTICOS -->
         <div class="card">
-            <h2><?= $catedratico_a_editar ? 'Editar Aulas a Cargo de: ' . htmlspecialchars($catedratico_a_editar['nombre']) : 'Gestión de Catedráticos' ?></h2>
+            <h2>Gestión de Catedráticos</h2>
             <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
-                <?= $catedratico_a_editar ? 'Modifica las aulas asignadas a este profesor.' : 'Agrega nuevos profesores al sistema y asígnales sus aulas a cargo.' ?>
+                Agrega nuevos profesores al sistema y asígnales sus aulas a cargo.
             </p>
 
             <form action="admin_panel.php" method="POST">
-                <?php if ($catedratico_a_editar): ?>
-                    <input type="hidden" name="actualizar_catedratico" value="1">
-                    <input type="hidden" name="usuario_id" value="<?= $catedratico_a_editar['id'] ?>">
-                <?php else: ?>
-                    <input type="hidden" name="registrar_catedratico" value="1">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="nombre">Nombre Completo:</label>
-                            <input type="text" id="nombre" name="nombre" required placeholder="Ej. Carlos Mendoza">
-                        </div>
-                        <div class="form-group">
-                            <label for="correo">Correo Electrónico:</label>
-                            <input type="email" id="correo" name="correo" required placeholder="profesor@intecap.edu.gt">
-                        </div>
-                        <div class="form-group">
-                            <label for="password">Contraseña Temporal:</label>
-                            <input type="password" id="password" name="password" required placeholder="******">
-                        </div>
+                <input type="hidden" name="registrar_catedratico" value="1">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="nombre">Nombre Completo:</label>
+                        <input type="text" id="nombre" name="nombre" required placeholder="Ej. Carlos Mendoza">
                     </div>
-                <?php endif; ?>
+                    <div class="form-group">
+                        <label for="correo">Correo Electrónico:</label>
+                        <input type="email" id="correo" name="correo" required placeholder="profesor@intecap.edu.gt">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Contraseña Temporal:</label>
+                        <input type="password" id="password" name="password" required placeholder="******">
+                    </div>
+                </div>
 
                 <div class="form-group">
-                    <label><?= $catedratico_a_editar ? 'Modificar Aulas Asignadas:' : 'Asignar Aulas a Cargo:' ?></label>
+                    <label>Asignar Aulas a Cargo:</label>
                     <div class="checkbox-container">
-                        <?php foreach ($aulas as $a): 
-                            // Marca automáticamente las casillas si el profesor ya tiene esa aula asignada
-                            $checked = in_array($a['id'], $aulas_del_catedratico) ? 'checked' : '';
-                        ?>
+                        <?php foreach ($aulas as $a): ?>
                             <label class="checkbox-item">
-                                <input type="checkbox" name="aulas[]" value="<?= $a['id'] ?>" <?= $checked ?>> 
+                                <input type="checkbox" name="aulas[]" value="<?= $a['id'] ?>"> 
                                 <?= $a['es_aula_magna'] ? 'Aula Magna' : 'Aula ' . htmlspecialchars($a['codigo']) ?>
                             </label>
                         <?php endforeach; ?>
                     </div>
                 </div>
 
-                <button type="submit" class="btn"><?= $catedratico_a_editar ? 'Guardar Cambios de Aulas' : 'Guardar Catedrático y Asignaciones' ?></button>
-                <?php if ($catedratico_a_editar): ?>
-                    <a href="admin_panel.php" class="btn" style="background-color: #64748b; text-decoration: none; display: inline-block; margin-left: 10px; text-align: center;">Cancelar Edición</a>
-                <?php endif; ?>
+                <button type="submit" class="btn">Guardar Catedrático y Asignaciones</button>
             </form>
         </div>
 
@@ -363,11 +368,19 @@ $catedraticos = $conexion->query($sql_profes)->fetchAll(PDO::FETCH_ASSOC);
                                 <td><?= htmlspecialchars($cat['correo']) ?></td>
                                 <td><strong><?= !empty($cat['aulas_cargo']) ? 'Aula(s): ' . htmlspecialchars($cat['aulas_cargo']) : '<span style="color: #94a3b8;">Sin aulas asignadas</span>' ?></strong></td>
                                 <td>
-                                    <a href="admin_panel.php?editar_cat=<?= $cat['id'] ?>" class="btn-edit" style="margin-right: 5px;">Editar Aulas</a>
+                                    <!-- Botón que abre la ventana modal pasando los datos mediante atributos data-* -->
+                                    <button type="button" class="btn-edit" 
+                                        onclick="abrirModal(
+                                            '<?= $cat['id'] ?>', 
+                                            '<?= htmlspecialchars($cat['nombre'], ENT_QUOTES) ?>', 
+                                            '<?= htmlspecialchars($cat['correo'], ENT_QUOTES) ?>', 
+                                            [<?= $cat['ids_aulas'] ?? '' ?>]
+                                        )">
+                                        Editar Catedrático
+                                    </button>
+
                                     <?php if ($cat['id'] != $_SESSION['usuario_id']): ?>
-                                        <a href="admin_panel.php?eliminar_cat=<?= $cat['id'] ?>" class="btn-delete" onclick="return confirm('¿Estás seguro de eliminar a este catedrático?')">Eliminar</a>
-                                    <?php else: ?>
-                                        <span style="font-size: 12px; color: #64748b;">(Usuario Actual)</span>
+                                        <a href="admin_panel.php?eliminar_cat=<?= $cat['id'] ?>" class="btn-delete" onclick="return confirm('¿Estás seguro de eliminar a este catedrático?')" style="margin-left: 5px;">Eliminar</a>
                                     <?php endif; ?>
                                 </td>
                             </tr>
@@ -381,6 +394,86 @@ $catedraticos = $conexion->query($sql_profes)->fetchAll(PDO::FETCH_ASSOC);
             </table>
         </div>
     </div>
+
+    <!-- VENTANA MODAL FLOTANTE PARA EDITAR CATEDRÁTICO -->
+    <div id="modalEditar" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitulo">Editar Catedrático</h3>
+                <button type="button" class="btn-close" onclick="cerrarModal()">&times;</button>
+            </div>
+            
+            <form action="admin_panel.php" method="POST">
+                <input type="hidden" name="actualizar_catedratico" value="1">
+                <input type="hidden" id="edit_usuario_id" name="usuario_id">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="edit_nombre">Nombre Completo:</label>
+                        <input type="text" id="edit_nombre" name="nombre" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_correo">Correo Electrónico:</label>
+                        <input type="email" id="edit_correo" name="correo" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_password">Nueva Contraseña:</label>
+                        <input type="password" id="edit_password" name="password" placeholder="Dejar en blanco para conservar">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Modificar Aulas a Cargo:</label>
+                    <div class="checkbox-container">
+                        <?php foreach ($aulas as $a): ?>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="aulas[]" value="<?= $a['id'] ?>" class="modal-aula-check"> 
+                                <?= $a['es_aula_magna'] ? 'Aula Magna' : 'Aula ' . htmlspecialchars($a['codigo']) ?>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn">Guardar Cambios</button>
+                    <button type="button" class="btn" style="background-color: #64748b;" onclick="cerrarModal()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- SCRIPT DE JAVASCRIPT PARA CONTROLAR EL MODAL -->
+    <script>
+        function abrirModal(id, nombre, correo, idsAulasAsignadas) {
+            // Rellenar campos del formulario flotante
+            document.getElementById('edit_usuario_id').value = id;
+            document.getElementById('edit_nombre').value = nombre;
+            document.getElementById('edit_correo').value = correo;
+            document.getElementById('edit_password').value = '';
+            document.getElementById('modalTitulo').innerText = 'Editar Catedrático: ' + nombre;
+
+            // Marcar o desmarcar los checkboxes de las aulas según lo que tenga asignado el profesor
+            let checkboxes = document.querySelectorAll('.modal-aula-check');
+            checkboxes.forEach(chk => {
+                let aulaId = parseInt(chk.value);
+                // Si el ID del aula está dentro del arreglo del profesor, se marca
+                chk.checked = idsAulasAsignadas.includes(aulaId);
+            });
+
+            // Mostrar el modal flotante
+            document.getElementById('modalEditar').style.display = 'flex';
+        }
+
+        function cerrarModal() {
+            // Ocultar el modal flotante
+            document.getElementById('modalEditar').style.display = 'none';
+        }
+    </script>
+
+
+
+
+
 
 </body>
 </html>

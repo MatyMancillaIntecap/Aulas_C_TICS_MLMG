@@ -12,6 +12,7 @@ $busqueda_realizada = false;
 $fecha_busqueda = "";
 $hora_inicio = "";
 $hora_fin = "";
+$error = "";
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $fecha_busqueda = $_POST['fecha'];
@@ -22,19 +23,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($hora_inicio >= $hora_fin) {
         $error = "La hora de inicio debe ser menor a la hora de fin.";
     } else {
-        // Consultamos qué aulas NO tienen una reserva en esa fecha exacta que se cruce con el rango de horas
+        // Traducimos la fecha seleccionada al nombre del día en español para que coincida con tu columna 'dia_semana'
+        $dias_espanol = [
+            'Monday'    => 'Lunes',
+            'Tuesday'   => 'Martes',
+            'Wednesday' => 'Miércoles',
+            'Thursday'  => 'Jueves',
+            'Friday'    => 'Viernes',
+            'Saturday'  => 'Sábado',
+            'Sunday'    => 'Domingo'
+        ];
+        $dia_ingles = date('l', strtotime($fecha_busqueda));
+        $dia_semana = $dias_espanol[$dia_ingles] ?? '';
+
+        // Consulta corregida: Valida el rango de fechas, el día de la semana y el cruce de horas
         $sql = "SELECT a.*, n.nombre as nivel_nombre 
                 FROM aulas a 
                 LEFT JOIN niveles n ON a.nivel_id = n.id 
                 WHERE a.id NOT IN (
-                    SELECT aula_id FROM reservas 
+                    SELECT aula_id 
+                    FROM reservas 
                     WHERE ? BETWEEN fecha AND fecha_fin 
-                    AND (hora_inicio < ? AND hora_fin > ?)
+                      AND dia_semana = ? 
+                      AND hora_inicio < ? 
+                      AND hora_fin > ?
                 )";
         
         $stmt = $conexion->prepare($sql);
-        // Comparamos si la fecha seleccionada cae dentro del rango [fecha, fecha_fin] de las reservas recurrentes
-        $stmt->execute([$fecha_busqueda, $hora_fin, $hora_inicio]);
+        $stmt->execute([$fecha_busqueda, $dia_semana, $hora_fin, $hora_inicio]);
         $aulas_disponibles = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
@@ -72,32 +88,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         .aula-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 15px; }
         .aula-card h3 { color: #166534; font-size: 16px; margin-bottom: 5px; }
         .badge { background: #22c55e; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .alert-error { background-color: #fee2e2; color: #991b1b; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; }
     </style>
 </head>
 <body>
 
     <header>
         <div class="logo-area">
-            <img src="logo_intecap.png" alt="Logo INTECAP">
+            <img src="Intecap_Logo.png" alt="Logo INTECAP">
             <h1>Sistema de Reservas</h1>
         </div>
 
-
-
-
-
         <nav>
-    <a href="index.php">📅 Calendario</a>
-    <a href="reservas.php">➕ Registrar Reservas</a>
-    <a href="mis_reservas.php">📋 Mis Reservas</a>
-    <a href="disponibilidad.php">🔍 Buscar Disponibilidad</a>
-    <a href="aulas.php">🏛️ Aulas y Recursos</a>
-    <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'): ?>
-        <a href="admin_panel.php" style="color: #d97706; font-weight: bold;">⚙️ Panel Admin</a>
-    <?php endif; ?>
-</nav>
-
-
+            <a href="index.php">📅 Calendario</a>
+            <a href="reservas.php">➕ Registrar Reservas</a>
+            <a href="mis_reservas.php">📋 Mis Reservas</a>
+            <a href="disponibilidad.php" class="active" style="color: #0284c7;">🔍 Buscar Disponibilidad</a>
+            <a href="aulas.php">🏛️ Aulas y Recursos</a>
+            <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'): ?>
+                <a href="admin_panel.php" style="color: #d97706; font-weight: bold;">⚙️ Panel Admin</a>
+            <?php endif; ?>
+        </nav>
 
         <div>
             <span class="user-info">Hola, <?= htmlspecialchars($_SESSION['nombre']) ?></span>
@@ -111,6 +122,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
                 Indica la fecha específica y el rango de horas para consultar qué salones están libres en ese momento.
             </p>
+
+            <?php if (!empty($error)): ?>
+                <div class="alert-error"><?= htmlspecialchars($error) ?></div>
+            <?php endif; ?>
 
             <form action="disponibilidad.php" method="POST">
                 <div class="form-grid">
@@ -139,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </form>
         </div>
 
-        <?php if ($busqueda_realizada): ?>
+        <?php if ($busqueda_realizada && empty($error)): ?>
             <div class="card">
                 <h3>Resultados para la fecha: <?= htmlspecialchars($fecha_busqueda) ?></h3>
                 <?php if (count($aulas_disponibles) > 0): ?>

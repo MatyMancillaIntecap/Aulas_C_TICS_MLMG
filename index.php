@@ -128,16 +128,15 @@ foreach ($reservas_raw as $res) {
             <img src="Intecap_Logo.png" alt="Logo INTECAP">
             <h1>Sistema de Reservas</h1>
         </div>
-        <nav>
-            <a href="index.php" class="active">📅 Calendario</a>
-            <a href="reservas.php">➕ Registrar Reservas</a>
-            <a href="mis_reservas.php">📋 Mis Reservas</a>
-            <a href="disponibilidad.php">🔍 Buscar Disponibilidad</a>
-            <a href="aulas.php">🏛️ Aulas y Recursos</a>
-            <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador'): ?>
-                <a href="admin_panel.php" style="color: #d97706; font-weight: bold;">⚙️ Panel Admin</a>
-            <?php endif; ?>
-        </nav>
+       <nav>
+    <a href="index.php">📅 Calendario</a>
+    <a href="reservas.php">➕ Registrar Reservas</a>
+    <a href="mis_reservas.php">📋 Mis Reservas</a>
+    <a href="disponibilidad.php">🔍 Buscar Disponibilidad</a>
+    <a href="aulas.php">🏛️ Aulas y Recursos</a>
+    <a href="cambiar_password.php">🔑 Cambiar Contraseña</a>
+    
+</nav>
         <div>
             <span class="user-info">Hola, <?= htmlspecialchars($_SESSION['nombre']) ?></span>
             <a href="logout.php" class="btn-logout">Salir</a>
