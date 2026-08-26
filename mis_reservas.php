@@ -92,7 +92,7 @@ $mis_reservas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     <header>
         <div class="logo-area">
-            <img src="logo_intecap.png" alt="Logo INTECAP">
+            <img src="Intecap_Logo.png" alt="Logo INTECAP">
             <h1>Sistema de Reservas</h1>
         </div>
 

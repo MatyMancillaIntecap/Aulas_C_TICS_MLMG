@@ -116,8 +116,8 @@ $sql_profes = "SELECT u.id, u.nombre, u.correo,
                FROM usuarios u 
                LEFT JOIN usuario_aulas ua ON u.id = ua.usuario_id 
                LEFT JOIN aulas a ON ua.aula_id = a.id 
-               WHERE u.rol = 'catedratico' 
-               GROUP BY u.id, u.nombre, u.correo";
+               WHERE u.rol IN ('catedratico' ,'administrador')
+               GROUP BY u.id, u.nombre, u.correo, u.rol";
 $catedraticos = $conexion->query($sql_profes)->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
