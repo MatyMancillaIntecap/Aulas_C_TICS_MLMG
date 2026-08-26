@@ -110,14 +110,15 @@ $total_catedraticos = $conexion->query("SELECT COUNT(*) FROM usuarios WHERE rol 
 $aulas = $conexion->query("SELECT a.*, n.nombre as nivel_nombre FROM aulas a LEFT JOIN niveles n ON a.nivel_id = n.id ORDER BY a.nivel_id ASC, a.codigo ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Consulta para obtener catedráticos junto con una lista en formato JSON de sus aulas asignadas (para abrirlas en el modal)
-$sql_profes = "SELECT u.id, u.nombre, u.correo, 
+$sql_profes = "SELECT u.id, u.nombre, u.correo, u.rol, 
                GROUP_CONCAT(a.codigo SEPARATOR ', ') as aulas_cargo,
                GROUP_CONCAT(ua.aula_id) as ids_aulas
                FROM usuarios u 
                LEFT JOIN usuario_aulas ua ON u.id = ua.usuario_id 
                LEFT JOIN aulas a ON ua.aula_id = a.id 
-               WHERE u.rol IN ('catedratico' ,'administrador')
+               WHERE u.rol IN ('catedratico', 'administrador') 
                GROUP BY u.id, u.nombre, u.correo, u.rol";
+
 $catedraticos = $conexion->query($sql_profes)->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
@@ -351,40 +352,49 @@ $catedraticos = $conexion->query($sql_profes)->fetchAll(PDO::FETCH_ASSOC);
             <h2>Profesores Registrados</h2>
             <table>
                 <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Nombre</th>
-                        <th>Correo Electrónico</th>
-                        <th>Aulas a Cargo</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
+    <tr>
+        <th style="width: 50px;">ID</th>
+        <th>Nombre</th>
+        <th>Correo Electrónico</th>
+        <th style="width: 130px;">Rol</th>
+        <th>Aulas a Cargo</th>
+        <th style="width: 160px; text-align: center;">Acciones</th>
+    </tr>
+</thead>
                 <tbody>
                     <?php if (count($catedraticos) > 0): ?>
-                        <?php foreach ($catedraticos as $cat): ?>
-                            <tr>
-                                <td><strong><?= htmlspecialchars($cat['id']) ?></strong></td>
-                                <td><?= htmlspecialchars($cat['nombre']) ?></td>
-                                <td><?= htmlspecialchars($cat['correo']) ?></td>
-                                <td><strong><?= !empty($cat['aulas_cargo']) ? 'Aula(s): ' . htmlspecialchars($cat['aulas_cargo']) : '<span style="color: #94a3b8;">Sin aulas asignadas</span>' ?></strong></td>
-                                <td>
-                                    <!-- Botón que abre la ventana modal pasando los datos mediante atributos data-* -->
-                                    <button type="button" class="btn-edit" 
-                                        onclick="abrirModal(
-                                            '<?= $cat['id'] ?>', 
-                                            '<?= htmlspecialchars($cat['nombre'], ENT_QUOTES) ?>', 
-                                            '<?= htmlspecialchars($cat['correo'], ENT_QUOTES) ?>', 
-                                            [<?= $cat['ids_aulas'] ?? '' ?>]
-                                        )">
-                                        Editar Catedrático
-                                    </button>
-
-                                    <?php if ($cat['id'] != $_SESSION['usuario_id']): ?>
-                                        <a href="admin_panel.php?eliminar_cat=<?= $cat['id'] ?>" class="btn-delete" onclick="return confirm('¿Estás seguro de eliminar a este catedrático?')" style="margin-left: 5px;">Eliminar</a>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
+                  <?php foreach ($catedraticos as $cat): ?>
+        <tr>
+            <td><strong><?= htmlspecialchars($cat['id']) ?></strong></td>
+            <td><?= htmlspecialchars($cat['nombre']) ?></td>
+            <td><?= htmlspecialchars($cat['correo']) ?></td>
+            <td>
+                <?php if (isset($cat['rol']) && $cat['rol'] === 'administrador'): ?>
+                    <span style="background: #fef3c7; color: #d97706; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block;">Administrador</span>
+                <?php else: ?>
+                    <span style="background: #e0f2fe; color: #0284c7; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block;">Catedrático</span>
+                <?php endif; ?>
+            </td>
+            <td><?= !empty($cat['aulas_cargo']) ? 'Aula(s): ' . htmlspecialchars($cat['aulas_cargo']) : '<span style="color: #94a3b8;">Sin aulas asignadas</span>' ?></td>
+            <td style="text-align: center; white-space: nowrap;">
+                <!-- Botón Editar -->
+                <button type="button" 
+        onclick="abrirModal(
+            <?= (int)$cat['id'] ?>, 
+            '<?= htmlspecialchars($cat['nombre'], ENT_QUOTES, 'UTF-8') ?>', 
+            '<?= htmlspecialchars($cat['correo'], ENT_QUOTES, 'UTF-8') ?>', 
+            [<?= $cat['ids_aulas'] ?? '' ?>]
+        )" 
+        class="btn-edit">
+    Editar
+</button>
+                <!-- Botón Eliminar (si no es el usuario principal) -->
+                <?php if ($cat['id'] != $_SESSION['usuario_id']): ?>
+                    <a href="eliminar_usuario.php?id=<?= $cat['id'] ?>" onclick="return confirm('¿Estás segura de eliminar a este usuario?');" style="background-color: #ef4444; color: white; padding: 6px 10px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: bold; display: inline-block;">Eliminar</a>
+                <?php endif; ?>
+            </td>
+        </tr>
+    <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
                             <td colspan="5" style="text-align: center; color: #94a3b8; padding: 25px;">No hay catedráticos registrados.</td>
@@ -399,8 +409,12 @@ $catedraticos = $conexion->query($sql_profes)->fetchAll(PDO::FETCH_ASSOC);
     <div id="modalEditar" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="modalTitulo">Editar Catedrático</h3>
-                <button type="button" class="btn-close" onclick="cerrarModal()">&times;</button>
+                <h3 id="modalTitulo">Editar </h3>
+               <button type="button" 
+        onclick="abrirModalEditar(<?= (int)$cat['id'] ?>, '<?= htmlspecialchars(addslashes($cat['nombre'])) ?>', '<?= htmlspecialchars(addslashes($cat['correo'])) ?>', '<?= htmlspecialchars($cat['rol'] ?? 'catedratico') ?>', '<?= htmlspecialchars($cat['ids_aulas'] ?? '') ?>')" 
+        style="background-color: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; margin-right: 4px;">
+    Editar
+</button>
             </div>
             
             <form action="admin_panel.php" method="POST">
